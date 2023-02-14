@@ -3,8 +3,9 @@ pub mod payload;
 use self::payload::{
     CommitCommentEventPayload, CreateEventPayload, DeleteEventPayload, EventPayload,
     ForkEventPayload, GollumEventPayload, IssueCommentEventPayload, IssuesEventPayload,
-    PullRequestEventPayload, PullRequestReviewCommentEventPayload, PullRequestReviewEventPayload,
-    PushEventPayload, WorkflowRunEventPayload,
+    PublicEventPayload, PullRequestEventPayload, PullRequestReviewCommentEventPayload,
+    PullRequestReviewEventPayload, PushEventPayload, ReleaseEventPayload, WorkflowRunEventPayload,
+    WatchEventPayload
 };
 use super::{ActorId, OrgId, RepositoryId};
 use chrono::{DateTime, Utc};
@@ -80,10 +81,13 @@ event_type! {
     (ForkEvent, ForkEventPayload),
     (GollumEvent, GollumEventPayload),
     (MemberEvent, MemberEventPayload),
+    (PublicEvent, PublicEventPayload),
     (PullRequestEvent, PullRequestEventPayload),
     (PullRequestReviewEvent, PullRequestReviewEventPayload),
     (PullRequestReviewCommentEvent, PullRequestReviewCommentEventPayload),
-    (WorkflowRunEvent, WorkflowRunEventPayload)
+    (ReleaseEvent, ReleaseEventPayload),
+    (WorkflowRunEvent, WorkflowRunEventPayload),
+    (WatchEvent, WatchEventPayload)
 }
 
 /// The repository an [`Event`] belongs to.
@@ -330,6 +334,14 @@ mod test {
             (
                 "WorkflowRunEvent",
                 include_str!("../../tests/resources/workflow_run_event.json"),
+            ),
+            (
+                "ReleaseEvent",
+                include_str!("../../tests/resources/release_event.json"),
+            ),
+            (
+                "WatchEvent",
+                include_str!("../../tests/resources/watch_event.json"),
             ),
             (
                 "UnknownEvent",

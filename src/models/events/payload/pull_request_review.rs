@@ -1,6 +1,5 @@
 use crate::models::{
     pulls::{PullRequest, Review},
-    Repository, User,
 };
 use serde::{Deserialize, Serialize};
 

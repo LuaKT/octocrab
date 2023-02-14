@@ -6,11 +6,14 @@ mod gollum;
 mod issue_comment;
 mod issues;
 mod member;
+mod public;
 mod pull_request;
 mod pull_request_review;
 mod pull_request_review_comment;
 mod push;
+mod release;
 mod workflow_run;
+mod watch;
 
 use crate::models::repos::GitUser;
 pub use commit_comment::*;
@@ -21,11 +24,14 @@ pub use gollum::*;
 pub use issue_comment::*;
 pub use issues::*;
 pub use member::*;
+pub use public::*;
 pub use pull_request::*;
 pub use pull_request_review::*;
 pub use pull_request_review_comment::*;
 pub use push::*;
+pub use release::*;
 pub use workflow_run::*;
+pub use watch::*;
 
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -48,10 +54,13 @@ pub enum EventPayload {
     ForkEvent(Box<ForkEventPayload>),
     GollumEvent(Box<GollumEventPayload>),
     MemberEvent(Box<MemberEventPayload>),
+    PublicEvent(Box<PublicEventPayload>),
     PullRequestEvent(Box<PullRequestEventPayload>),
     PullRequestReviewEvent(Box<PullRequestReviewEventPayload>),
     PullRequestReviewCommentEvent(Box<PullRequestReviewCommentEventPayload>),
+    ReleaseEvent(Box<ReleaseEventPayload>),
     WorkflowRunEvent(Box<WorkflowRunEventPayload>),
+    WatchEvent(Box<WatchEventPayload>),
     UnknownEvent(Box<serde_json::Value>),
 }
 
