@@ -98,7 +98,7 @@ impl<'octo, 'r> ReleasesHandler<'octo, 'r> {
     /// ```
     pub async fn get_asset(&self, asset_id: AssetId) -> crate::Result<models::repos::Asset> {
         let route = format!(
-            "/repos/{owner}/{repo}/assets/{asset_id}",
+            "/repos/{owner}/{repo}/releases/assets/{asset_id}",
             owner = self.parent.owner,
             repo = self.parent.repo,
             asset_id = asset_id,
@@ -193,12 +193,9 @@ impl<'octo, 'r> ReleasesHandler<'octo, 'r> {
             .header(http::header::ACCEPT, "application/octet-stream");
         let request = self.parent.crab.build_request(builder, None::<&()>)?;
         let response = self.parent.crab.execute(request).await?;
-        Ok(response
-            .into_body()
-            .map_err(|source| crate::error::Error::Hyper {
-                source,
-                backtrace: snafu::Backtrace::generate(),
-            }))
+        let response = self.parent.crab.follow_location_to_data(response).await?;
+        Ok(http_body_util::BodyStream::new(response.into_body())
+            .try_filter_map(|frame| futures_util::future::ok(frame.into_data().ok())))
     }
 }
 

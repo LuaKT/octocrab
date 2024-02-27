@@ -1,9 +1,13 @@
 use super::*;
-use crate::error;
 use crate::error::SerdeSnafu;
-use hyper::{body, Response};
+use bytes::Bytes;
+use http_body::Body;
+use http_body_util::BodyExt;
+use hyper::Response;
 use snafu::ResultExt;
 use url::Url;
+
+pub mod secrets;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -123,12 +127,12 @@ pub struct Commit {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comments_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub author: Option<Author>,
+    pub author: Option<CommitAuthor>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub committer: Option<Author>,
+    pub committer: Option<CommitAuthor>,
 }
 
-/// The author of a commit, identified by its name and email, as well as (optionally) a time
+/// The author of a commit, identified by its name and email, as well as (optionally) a time and a github username
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GitUserTime {
     #[serde(flatten)]
@@ -136,6 +140,9 @@ pub struct GitUserTime {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date: Option<DateTime<Utc>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
 }
 
 /// The author of a commit, identified by its name and email.
@@ -167,7 +174,8 @@ pub struct Content {
     pub path: String,
     pub sha: String,
     pub encoding: Option<String>,
-    /// File content, Base64 encoded
+    /// File content, Base64 encoded. See also
+    /// [Content::decoded_content].
     pub content: Option<String>,
     pub size: i64,
     pub url: String,
@@ -223,14 +231,13 @@ impl Content {
 
 #[async_trait::async_trait]
 impl crate::FromResponse for ContentItems {
-    async fn from_response(response: Response<hyper::Body>) -> crate::Result<Self> {
-        let json: serde_json::Value = serde_json::from_slice(
-            body::to_bytes(response.into_body())
-                .await
-                .context(error::HyperSnafu)?
-                .as_ref(),
-        )
-        .context(SerdeSnafu)?;
+    async fn from_response<B>(response: Response<B>) -> crate::Result<Self>
+    where
+        B: Body<Data = Bytes, Error = crate::Error> + Send,
+    {
+        let json: serde_json::Value =
+            serde_json::from_slice(response.into_body().collect().await?.to_bytes().as_ref())
+                .context(SerdeSnafu)?;
 
         if json.is_array() {
             Ok(ContentItems {
@@ -300,7 +307,7 @@ pub struct Release {
     pub prerelease: bool,
     pub created_at: Option<DateTime<Utc>>,
     pub published_at: Option<DateTime<Utc>>,
-    pub author: crate::models::Author,
+    pub author: Option<crate::models::Author>,
     pub assets: Vec<Asset>,
 }
 
@@ -319,7 +326,34 @@ pub struct Asset {
     pub download_count: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub uploader: CommitAuthor,
+    pub uploader: Option<Uploader>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub struct Uploader {
+    pub name: Option<String>,
+    pub email: Option<String>,
+    pub login: String,
+    pub id: UploaderId,
+    pub node_id: String,
+    pub avatar_url: Url,
+    pub gravatar_id: Option<String>,
+    pub url: Url,
+    pub html_url: Url,
+    pub followers_url: Url,
+    pub following_url: Url,
+    pub gists_url: Url,
+    pub starred_url: Url,
+    pub subscriptions_url: Url,
+    pub organizations_url: Url,
+    pub repos_url: Url,
+    pub events_url: Url,
+    pub received_events_url: Url,
+    pub r#type: String,
+    pub site_admin: bool,
+    pub starred_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use url::Url;
 
+pub mod actions;
 pub mod activity;
 pub mod apps;
 pub mod checks;
@@ -21,7 +22,11 @@ pub mod pulls;
 pub mod reactions;
 pub mod repos;
 pub mod teams;
+pub mod timelines;
+pub mod webhook_events;
 pub mod workflows;
+
+mod date_serde;
 
 pub use apps::App;
 
@@ -96,6 +101,7 @@ id_type!(
     AppId,
     ArtifactId,
     AssetId,
+    BranchProtectionRuleId,
     CardId,
     CheckSuiteId,
     CheckRunId,
@@ -104,6 +110,7 @@ id_type!(
     IssueEventId,
     IssueId,
     JobId,
+    HookId,
     LabelId,
     MilestoneId,
     NotificationId,
@@ -117,9 +124,14 @@ id_type!(
     RepositoryId,
     ReviewId,
     RunId,
+    RunnerId,
+    RunnerGroupId,
+    RunnerLabelId,
     StatusId,
     TeamId,
+    TimelineEventId,
     ThreadId,
+    UploaderId,
     UserId,
     UserOrOrgId,
     WorkflowId,
@@ -159,38 +171,116 @@ pub struct Contents {
     pub download_url: Url,
 }
 
+/// Issue events are triggered by activity in issues and pull requests.
+/// https://docs.github.com/en/webhooks-and-events/events/issue-event-types
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Event {
+    /// The issue or pull request was added to a project board.
     AddedToProject,
+    /// The issue or pull request was assigned to a user.
     Assigned,
+    /// Auto merge was disabled for a pull request.
+    AutoMergeDisabled,
+    /// Auto merge was enabled for a pull request.
+    AutoMergeEnabled,
+    /// GitHub unsuccessfully attempted to automatically change the base branch of the pull request.
+    AutomaticBaseChangeFailed,
+    /// GitHub successfully attempted to automatically change the base branch of the pull request.
+    AutomaticBaseChangeSucceeded,
+    /// The base reference branch of the pull request changed.
+    BaseRefChanged,
+    /// Not documented in the Github issue events documentation.
+    BaseRefForcePushed,
+    /// The issue or pull request was closed. When the commit_id is present, it identifies the commit that closed the issue using "closes / fixes" syntax.
     Closed,
+    /// A comment was added to the issue or pull request.
+    Commented,
+    /// A comment that was removed from the issue or pull request.
+    /// This isn't documented as part of the issues-event-types API but returned by the API.
+    CommentDeleted,
+    /// A commit was added to the pull request's HEAD branch.
+    Committed,
+    /// The issue or pull request was linked to another issue or pull request.
+    Connected,
+    /// The pull request was converted to draft mode.
+    ConvertToDraft,
+    /// The issue was created by converting a note in a project board to an issue.
     ConvertedNoteToIssue,
+    /// The issue was closed and converted to a discussion.
+    ConvertedToDiscussion,
+    /// The issue or pull request was referenced from another issue or pull request.
+    #[serde(rename = "cross-referenced")]
+    CrossReferenced,
+    /// The issue or pull request was removed from a milestone.
     Demilestoned,
+    /// The pull request was deployed.
+    Deployed,
+    /// The pull request deployment environment was changed.
+    DeploymentEnvironmentChanged,
+    /// The issue or pull request was unlinked from another issue or pull request.
+    Disconnected,
+    /// The pull request's HEAD branch was deleted.
     HeadRefDeleted,
+    /// The pull request's HEAD branch was force pushed.
     HeadRefForcePushed,
+    /// The pull request's HEAD branch was restored to the last known commit.
     HeadRefRestored,
+    /// A label was added to the issue or pull request.
     Labeled,
+    /// A comment on a line of source in a pull request. Not documented in the issue and events documentation.
+    #[serde(rename = "line-commented")]
+    LineCommented,
+    /// The issue or pull request was locked.
     Locked,
+    /// The actor was @mentioned in an issue or pull request body.
     Mentioned,
+    /// A user with write permissions marked an issue as a duplicate of another issue, or a pull request as a duplicate of another pull request.
     MarkedAsDuplicate,
+    /// The pull request was merged. The commit_id attribute is the SHA1 of the HEAD commit that was merged. The commit_repository is always the same as the main repository.
     Merged,
+    /// The issue or pull request was added to a milestone.
     Milestoned,
+    /// The issue or pull request was moved between columns in a project board.
     MovedColumnsInProject,
+    /// The issue was pinned.
+    Pinned,
+    /// A draft pull request was marked as ready for review.
+    ReadyForReview,
+    /// The issue was referenced from a commit message. The commit_id attribute is the commit SHA1 of where that happened and the commit_repository is where that commit was pushed.
     Referenced,
+    /// The issue or pull request was removed from a project board.
     RemovedFromProject,
+    /// The issue or pull request title was changed.
     Renamed,
+    /// The issue or pull request was reopened.
     Reopened,
+    /// The pull request review was dismissed.
     ReviewDismissed,
+    /// A pull request review was requested.
     ReviewRequested,
+    /// A pull request review request was removed.
     ReviewRequestRemoved,
+    /// The pull request was reviewed.
+    Reviewed,
+    /// Someone subscribed to receive notifications for an issue or pull request.
     Subscribed,
+    /// The issue was transferred to another repository.
     Transferred,
+    /// A user was unassigned from the issue.
     Unassigned,
+    /// A label was removed from the issue.
     Unlabeled,
+    /// The issue was unlocked.
     Unlocked,
+    /// An issue that a user had previously marked as a duplicate of another issue is no longer considered a duplicate, or a pull request that a user had previously marked as a duplicate of another pull request is no longer considered a duplicate.
     UnmarkedAsDuplicate,
+    /// The issue was unpinned.
+    Unpinned,
+    /// Someone unsubscribed from receiving notifications for an issue or pull request.
+    Unsubscribed,
+    /// An organization owner blocked a user from the organization.
     UserBlocked,
 }
 
@@ -244,7 +334,8 @@ pub struct ProjectCard {
     pub column_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub previous_column_name: Option<String>,
-    pub column_url: Url,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column_url: Option<Url>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -323,6 +414,41 @@ pub struct Author {
     pub received_events_url: Url,
     pub r#type: String,
     pub site_admin: bool,
+    pub patch_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[non_exhaustive]
+pub enum AuthorAssociation {
+    Collaborator,
+    Contributor,
+    FirstTimer,
+    FirstTimeContributor,
+    Mannequin,
+    Member,
+    None,
+    Owner,
+    #[serde(untagged)]
+    Other(String),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct Collaborator {
+    #[serde(flatten)]
+    pub author: Author,
+    pub permissions: Permissions,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct Contributor {
+    #[serde(flatten)]
+    pub author: Author,
+    pub contributions: u32,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -513,11 +639,23 @@ pub struct Repository {
     pub disabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visibility: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "date_serde::deserialize_opt"
+    )]
     pub pushed_at: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "date_serde::deserialize_opt"
+    )]
     pub created_at: Option<DateTime<Utc>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "date_serde::deserialize_opt"
+    )]
     pub updated_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Permissions>,
@@ -529,6 +667,10 @@ pub struct Repository {
     pub allow_squash_merge: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_merge_commit: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_update_branch: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_forking: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscribers_count: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -727,11 +869,28 @@ pub struct Installation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_type: Option<String>,
     pub permissions: InstallationPermissions,
+    /// List of events in the installation.
+    ///
+    /// Note that for Webhook events, the list of events in the
+    /// list is guaranteed to match variants from
+    /// [WebhookEventType](webhook_events::WebhookEventType)
     pub events: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub single_file_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repository_selection: Option<String>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "date_serde::deserialize_opt"
+    )]
+    pub created_at: Option<DateTime<Utc>>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "date_serde::deserialize_opt"
+    )]
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]

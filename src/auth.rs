@@ -45,6 +45,8 @@ pub enum Auth {
     App(AppAuth),
     /// Authenticate as a Github OAuth App
     OAuth(OAuth),
+    /// Authenticate using a User Access Token
+    UserAccessToken(SecretString),
 }
 
 impl Default for Auth {
@@ -91,13 +93,16 @@ impl AppAuth {
     }
 }
 
-/// The data necessary to authenticate as a github OAtuh app.
+/// The data necessary to authenticate as a GitHub OAuth app.
 #[derive(Clone, Deserialize)]
 #[serde(from = "OAuthWire")]
 pub struct OAuth {
     pub access_token: SecretString,
     pub token_type: String,
     pub scope: Vec<String>,
+    pub expires_in: Option<usize>,
+    pub refresh_token: Option<SecretString>,
+    pub refresh_token_expires_in: Option<usize>,
 }
 
 /// The wire format of the OAuth struct.
@@ -106,6 +111,9 @@ struct OAuthWire {
     access_token: String,
     token_type: String,
     scope: String,
+    expires_in: Option<usize>,
+    refresh_token: Option<String>,
+    refresh_token_expires_in: Option<usize>,
 }
 
 impl From<OAuthWire> for OAuth {
@@ -114,6 +122,9 @@ impl From<OAuthWire> for OAuth {
             access_token: SecretString::from(value.access_token),
             token_type: value.token_type,
             scope: value.scope.split(',').map(ToString::to_string).collect(),
+            expires_in: value.expires_in,
+            refresh_token: value.refresh_token.map(SecretString::from),
+            refresh_token_expires_in: value.refresh_token_expires_in,
         }
     }
 }
@@ -155,7 +166,7 @@ impl crate::Octocrab {
         };
         let codes: DeviceCodes = self
             .post(
-                "login/device/code",
+                "/login/device/code",
                 Some(&DeviceFlow {
                     client_id: client_id.expose_secret(),
                     scope: &scope,
@@ -201,7 +212,7 @@ impl DeviceCodes {
     ) -> Result<Either<OAuth, Continue>> {
         let poll: TokenResponse = crab
             .post(
-                "login/oauth/access_token",
+                "/login/oauth/access_token",
                 Some(&PollForDevice {
                     client_id: client_id.expose_secret(),
                     device_code: &self.device_code,

@@ -1,12 +1,16 @@
 //! The repositories API.
 
+use bytes::Bytes;
 use http::header::ACCEPT;
 use http::request::Builder;
 use http::Uri;
+use http_body_util::combinators::BoxBody;
 use snafu::ResultExt;
 
 mod branches;
+mod collaborators;
 mod commits;
+mod contributors;
 pub mod events;
 mod file;
 pub mod forks;
@@ -14,22 +18,29 @@ mod generate;
 mod merges;
 mod pulls;
 pub mod releases;
+mod secrets;
 mod stargazers;
 mod status;
 mod tags;
+mod teams;
 
 use crate::error::HttpSnafu;
+use crate::repos::file::GetReadmeBuilder;
 use crate::{models, params, Octocrab, Result};
 pub use branches::ListBranchesBuilder;
+pub use collaborators::ListCollaboratorsBuilder;
 pub use commits::ListCommitsBuilder;
+pub use contributors::ListContributorsBuilder;
 pub use file::{DeleteFileBuilder, GetContentBuilder, UpdateFileBuilder};
 pub use generate::GenerateRepositoryBuilder;
 pub use merges::MergeBranchBuilder;
 pub use pulls::ListPullsBuilder;
 pub use releases::ReleasesHandler;
+pub use secrets::RepoSecretsHandler;
 pub use stargazers::ListStarGazersBuilder;
 pub use status::{CreateStatusBuilder, ListStatusesBuilder};
 pub use tags::ListTagsBuilder;
+pub use teams::ListTeamsBuilder;
 
 /// Handler for GitHub's repository API.
 ///
@@ -217,6 +228,24 @@ impl<'octo> RepoHandler<'octo> {
         GetContentBuilder::new(self)
     }
 
+    /// Get repository readme.
+    /// ```no_run
+    /// # async fn run() -> octocrab::Result<()> {
+    ///
+    /// octocrab::instance()
+    ///     .repos("owner", "repo")
+    ///     .get_readme()
+    ///     .path("path/to/file")
+    ///     .r#ref("main")
+    ///     .send()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get_readme(&self) -> GetReadmeBuilder<'_, '_> {
+        GetReadmeBuilder::new(self)
+    }
+
     /// Creates a new file in the repository.
     /// ```no_run
     /// # async fn run() -> octocrab::Result<()> {
@@ -260,6 +289,17 @@ impl<'octo> RepoHandler<'octo> {
         )
     }
 
+    /// Update an existing file.
+    ///
+    /// - `path`: the path of the updated file.
+    /// - `message`: the message of the commit used to update the file
+    /// - `content`: the updated contents of the file (base64 encoding is done
+    ///   automatically).
+    /// - `sha`: the blob SHA of the file being updated. This can be obtained
+    ///   using the [RepoHandler::get_content] function.
+    ///
+    /// [GitHub API documentation](https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#create-or-update-file-contents)
+    ///
     /// ```no_run
     /// # async fn run() -> octocrab::Result<()> {
     /// # let blob_sha = "";
@@ -379,6 +419,39 @@ impl<'octo> RepoHandler<'octo> {
         ListCommitsBuilder::new(self)
     }
 
+    /// List teams from a repository.
+    /// ```no_run
+    /// # async fn run() -> octocrab::Result<()> {
+    /// let teams = octocrab::instance().repos("owner", "repo").list_teams().send().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn list_teams(&self) -> ListTeamsBuilder<'_, '_> {
+        ListTeamsBuilder::new(self)
+    }
+
+    /// List collaborators from a repository.
+    /// ```no_run
+    /// # async fn run() -> octocrab::Result<()> {
+    /// let collaborators = octocrab::instance().repos("owner", "repo").list_collaborators().send().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn list_collaborators(&self) -> ListCollaboratorsBuilder<'_, '_> {
+        ListCollaboratorsBuilder::new(self)
+    }
+
+    /// List contributors from a repository.
+    /// ```no_run
+    /// # async fn run() -> octocrab::Result<()> {
+    /// let contributors = octocrab::instance().repos("owner", "repo").list_contributors().send().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn list_contributors(&self) -> ListContributorsBuilder<'_, '_> {
+        ListContributorsBuilder::new(self)
+    }
+
     /// List star_gazers from a repository.
     /// ```no_run
     /// # async fn run() -> octocrab::Result<()> {
@@ -490,7 +563,7 @@ impl<'octo> RepoHandler<'octo> {
         self,
         reference: impl Into<params::repos::Commitish>,
         path: impl AsRef<str>,
-    ) -> Result<http::Response<hyper::Body>> {
+    ) -> Result<http::Response<BoxBody<Bytes, crate::Error>>> {
         let route = format!(
             "/repos/{owner}/{repo}/contents/{path}",
             owner = self.owner,
@@ -535,7 +608,7 @@ impl<'octo> RepoHandler<'octo> {
     pub async fn download_tarball(
         &self,
         reference: impl Into<params::repos::Commitish>,
-    ) -> Result<http::Response<hyper::Body>> {
+    ) -> Result<http::Response<BoxBody<Bytes, crate::Error>>> {
         let route = format!(
             "/repos/{owner}/{repo}/tarball/{reference}",
             owner = self.owner,
@@ -546,7 +619,9 @@ impl<'octo> RepoHandler<'octo> {
             .path_and_query(route)
             .build()
             .context(HttpSnafu)?;
-        self.crab._get(uri).await
+        self.crab
+            .follow_location_to_data(self.crab._get(uri).await?)
+            .await
     }
 
     /// Check if a user is a repository collaborator
@@ -585,5 +660,10 @@ impl<'octo> RepoHandler<'octo> {
         base: impl Into<String>,
     ) -> MergeBranchBuilder<'octo, '_> {
         MergeBranchBuilder::new(self, head, base)
+    }
+
+    /// Handle secrets on the repository
+    pub fn secrets(&self) -> RepoSecretsHandler<'_> {
+        RepoSecretsHandler::new(self)
     }
 }

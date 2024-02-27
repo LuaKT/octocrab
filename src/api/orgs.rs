@@ -3,6 +3,7 @@
 mod events;
 mod list_members;
 mod list_repos;
+mod secrets;
 
 use crate::error::HttpSnafu;
 use crate::Octocrab;
@@ -12,6 +13,7 @@ use snafu::ResultExt;
 pub use self::events::ListOrgEventsBuilder;
 pub use self::list_members::ListOrgMembersBuilder;
 pub use self::list_repos::ListReposBuilder;
+pub use self::secrets::OrgSecretsHandler;
 
 /// A client to GitHub's organization API.
 ///
@@ -176,11 +178,11 @@ impl<'octo> OrgHandler<'octo> {
     /// ```no_run
     /// # async fn run() -> octocrab::Result<()> {
     /// # let octocrab = octocrab::Octocrab::default();
-    /// use octocrab::models::hooks::{Hook, Config as HookConfig};
+    /// use octocrab::models::hooks::{Hook, Config as HookConfig, ContentType as HookContentType};
     ///
     /// let config = HookConfig {
     ///   url: "https://example.com".to_string(),
-    ///   content_type: Some("json".to_string()),
+    ///   content_type: Some(HookContentType::Json),
     ///   insecure_ssl: None,
     ///   secret: None
     /// };
@@ -219,5 +221,12 @@ impl<'octo> OrgHandler<'octo> {
     /// ```
     pub fn list_members(&self) -> list_members::ListOrgMembersBuilder {
         list_members::ListOrgMembersBuilder::new(self)
+    }
+
+    /// Handle secrets on the organizaton
+    /// ```no_run
+    /// ```
+    pub fn secrets(&self) -> secrets::OrgSecretsHandler<'_> {
+        secrets::OrgSecretsHandler::new(self)
     }
 }

@@ -29,7 +29,7 @@ mod test {
         let json = include_str!("../../../../tests/resources/push_event.json");
         let event: Event = serde_json::from_str(json).unwrap();
         assert!(event.payload.is_some());
-        let payload = event.payload.unwrap();
+        let payload = event.payload.unwrap().specific.unwrap();
         match payload {
             EventPayload::PushEvent(payload) => {
                 assert_eq!(payload.push_id.0, 6080608029);
@@ -39,7 +39,7 @@ mod test {
                 assert_eq!(payload.head, "eb1a60c03544dcea290f2d57bb66ae188ce25778");
                 assert_eq!(payload.before, "9b2afb3a8e03fb30cc09e5efb64823bde802cf59");
                 assert_eq!(payload.commits.len(), 1);
-                let commit = payload.commits.get(0).unwrap();
+                let commit = payload.commits.first().unwrap();
                 assert_eq!(commit.sha, "eb1a60c03544dcea290f2d57bb66ae188ce25778");
                 assert_eq!(
                     commit.author,

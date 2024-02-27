@@ -25,6 +25,8 @@ pub struct PullRequest {
     pub comments_url: Option<Url>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub statuses_url: Option<Url>,
+    /// The pull request number.  Note that GitHub's REST API
+    /// considers every pull-request an issue with the same number.
     pub number: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<IssueState>,
@@ -78,11 +80,23 @@ pub struct PullRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<Box<Links>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub author_association: Option<String>,
+    pub author_association: Option<AuthorAssociation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub draft: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repo: Option<Box<Repository>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additions: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deletions: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub changed_files: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commits: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_comments: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comments: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -233,7 +247,7 @@ pub enum ReviewState {
 #[non_exhaustive]
 pub struct Comment {
     pub url: Url,
-    pub pull_request_review_id: ReviewId,
+    pub pull_request_review_id: Option<ReviewId>,
     pub id: CommentId,
     pub node_id: String,
     pub diff_hunk: String,
@@ -243,13 +257,13 @@ pub struct Comment {
     pub commit_id: String,
     pub original_commit_id: String,
     #[serde(default)]
-    pub in_reply_to_id: Option<u64>,
+    pub in_reply_to_id: Option<CommentId>,
     pub user: Option<Author>,
     pub body: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
     pub html_url: String,
-    pub author_association: String,
+    pub author_association: AuthorAssociation,
     #[serde(rename = "_links")]
     pub links: Links,
     pub start_line: Option<u64>,
@@ -258,6 +272,14 @@ pub struct Comment {
     pub line: Option<u64>,
     pub original_line: Option<u64>,
     pub side: Option<String>,
+}
+
+/// A Thread in a pull request review
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct Thread {
+    pub comments: Vec<Comment>,
+    pub node_id: String,
 }
 
 // This is rather annoying, but Github uses both SCREAMING_SNAKE_CASE and snake_case
